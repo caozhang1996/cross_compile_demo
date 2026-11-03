@@ -1,0 +1,26 @@
+# 忽略 CMake 生成的构建目录
+build-*/
+Build/
+cmake-build-*/
+
+# 忽略安装输出目录
+install/
+install-*/
+
+# 忽略 colcon 构建日志
+log/
+
+# 忽略 CMake 生成的文件
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# 忽略编译生成的临时文件
+*.o
+*.obj
+*.so
+*.a
+*.exe
+*.out
+*.log
