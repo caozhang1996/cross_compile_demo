@@ -17,13 +17,52 @@ set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
 # B) Ubuntu 自带 cross 包（本演示用这套）：头文件/库分布在 multiarch
 #   目录里。用 FIND_ROOT_PATH 把它们圈起来，让 find_library / find_package
 #   只在这个圈内找系统库，绝不碰到宿主机 x86 库。
-set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu)
+
+set(CMAKE_SYSROOT $ENV{SYSROOT})
+set(CMAKE_FIND_ROOT_PATH $ENV{SYSROOT})
 
 # ── 三条查找策略：不同类别的名字，在不同机器上找 ────────────
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)    # find_program：只在 build 机找
                                                 #  （程序会在 build 机上被拉起来执行）
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)     # find_library：只在目标侧找
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)     # find_path / find_file：只在目标侧找
+
+if($ENV{SYSTEM_TAG} STREQUAL "orin-8.5.2")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.4/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-11.4/include -L${CMAKE_SYSROOT}/usr/local/cuda-11.4/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "orin-8.6.2")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.2/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-12.2/include -L${CMAKE_SYSROOT}/usr/local/cuda-12.2/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "orin-10.3.0")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.6/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-12.6/include -L${CMAKE_SYSROOT}/usr/local/cuda-12.6/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "orin-r6.2")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.6/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-12.6/include -L${CMAKE_SYSROOT}/usr/local/cuda-12.6/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "jp-7.0")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-13.0/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-13.0/include -L${CMAKE_SYSROOT}/usr/local/cuda-13.0/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "driveos-thoru")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-12.8/include -L${CMAKE_SYSROOT}/usr/local/cuda-12.8/lib64"
+  )
+elseif($ENV{SYSTEM_TAG} STREQUAL "jetson-jp7.2")
+  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-13.2/bin/nvcc")
+  set(CMAKE_CUDA_FLAGS
+      "-ccbin ${CMAKE_CXX_COMPILER} -Xcompiler -fPIC -I${CMAKE_SYSROOT}/usr/local/cuda-13.2/include -L${CMAKE_SYSROOT}/usr/local/cuda-13.2/lib64"
+  )
+endif()
 
 # ── build 机也能启动 aarch64 可执行文件（qemu-user）──────────
 # 这样 CTest 不用上板就能跑。首次 configure 后才生效，缓存里看不到别慌。
