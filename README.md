@@ -95,3 +95,6 @@ qemu-aarch64 -L /usr/aarch64-linux-gnu ./install-cross/…/cross_compile_demo
 | cross 工具链 | `aarch64-linux-gnu-g++` 11.2/11.4（glibc 目标为 aarch64） |
 | 仿真 | qemu-user 6.2，`-L /usr/aarch64-linux-gnu` |
 | 验证结果 | 原生/cross CTest 各 1/1 Passed；产物经 `file` 确认架构 |
+
+## 交叉编译笔记学习
+https://docs.qq.com/doc/DQ2ZvQm9NVnJHS01W
