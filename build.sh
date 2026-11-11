@@ -17,6 +17,13 @@ set -e
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# 虚拟根目录: 相当于把这个文件夹当成目标板子的 `/`
+export SYSROOT=/sysroot
+
+# 虚拟的第三方库路径和包安装路径
+export THIRD_PARTY_LIBRARIES_PATH=/opt/3rdparty
+export INSTALL_PATH=/opt/install
+
 NATIVE_DIR="$SRC_DIR/build-native"
 NATIVE_INSTALL="$SRC_DIR/install-native"
 CROSS_DIR="$SRC_DIR/build-cross"
