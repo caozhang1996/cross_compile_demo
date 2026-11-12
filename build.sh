@@ -4,7 +4,8 @@
 # 用法：
 #   ./build.sh native   # 原生编译（x86_64）并安装到 install-native/，运行
 #   ./build.sh cross    # 交叉编译（aarch64），产物安装到 install-cross/
-#   ./build.sh run      # 伪板运行 cross 产物（qemu-aarch64）
+#   ./build.sh run                # 伪板运行 cross 产物（qemu-aarch64），默认 cross_compile_demo
+#   ./build.sh run cuda_demo      # 伪板运行 GPU demo（cuda_demo，CPU 降级分支）
 #   ./build.sh test     # CTest：原生 + cross 各跑一遍
 #   ./build.sh clean    # 删除 build-*/ 和 install-*/
 #
@@ -34,6 +35,7 @@ TOOLCHAIN="$SRC_DIR/toolchains/aarch64-linux-gnu.toolchain.cmake"
 # CMakeLists.txt 里 install RUNTIME DESTINATION lib/${PROJECT_NAME}
 NATIVE_BIN="$NATIVE_INSTALL/lib/cross_compile_demo/cross_compile_demo"
 CROSS_BIN="$CROSS_INSTALL/lib/cross_compile_demo/cross_compile_demo"
+CUDA_BIN="$CROSS_INSTALL/lib/cross_compile_demo/cuda_demo"
 
 configure_native() {
     cmake -S "$SRC_DIR" -B "$NATIVE_DIR" \
@@ -65,7 +67,11 @@ case "${1:-all}" in
     file "$CROSS_BIN"                        # 用 file 确认 ELF 架构
     ;;
   run)
-    "$SRC_DIR/run-on-qemu.sh" "$CROSS_BIN"
+    # ./build.sh run [cross_compile_demo|cuda_demo]，按 $2 选跑哪个交叉产物
+    # 不传 $2 时默认 cross_compile_demo
+    RUN_BIN="$CROSS_BIN"
+    [ "${2:-}" = "cuda_demo" ] && RUN_BIN="$CUDA_BIN"
+    "$SRC_DIR/run-on-qemu.sh" "$RUN_BIN"
     ;;
   test)
     configure_native && cmake --build "$NATIVE_DIR"
@@ -82,6 +88,7 @@ case "${1:-all}" in
     ;;
   *)
     echo "用法: $0 [native|cross|run|test|clean]"
+    echo "      $0 run [cross_compile_demo|cuda_demo]   # 伪板运行，默认 cross_compile_demo"
     exit 1
     ;;
 esac
