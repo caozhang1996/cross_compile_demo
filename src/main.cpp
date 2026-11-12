@@ -9,32 +9,37 @@
 #endif
 
 // 由编译器预定义宏推断实际架构，和 CMake 传进来的对照
-static std::string machine() {
+static std::string machine()
+{
 #if defined(__aarch64__)
-    return "aarch64";
+  return "aarch64";
 #elif defined(__x86_64__)
-    return "x86_64";
+  return "x86_64";
 #elif defined(__arm__)
-    return "arm";
+  return "arm";
 #elif defined(__i386__)
-    return "i386";
+  return "i386";
 #else
-    return "unknown";
+  return "unknown";
 #endif
 }
 
-int main() {
-    std::atomic<int> counter{0};
-    std::vector<std::string> items;
-    for (int i = 1; i <= 3; ++i) {
-        items.push_back(std::to_string(i));
-        counter.fetch_add(i);
-    }
-    std::cout << "CMake 传入的目标架构   : " TARGET_PROCESSOR "\n"
-              << "编译器宏推断的架构     : " << machine() << "\n"
-              << "sizeof(void*)          : " << sizeof(void*) << "\n"
-              << "vector 元素总数        : " << items.size() << "\n"
-              << "atomic 累加结果        : " << counter.load() << "\n"
-              << "C++ 语言标准           : " << __cplusplus << "\n";
-    return 0;
+int main()
+{
+  std::atomic<int> counter{0};
+  std::vector<std::string> items;
+
+  for (int i = 1; i <= 3; ++i)
+  {
+    items.push_back(std::to_string(i));
+    counter.fetch_add(i);
+  }
+
+  std::cout << "CMake 传入的目标架构   : " TARGET_PROCESSOR "\n"
+            << "编译器宏推断的架构     : " << machine() << "\n"
+            << "sizeof(void*)          : " << sizeof(void*) << "\n"
+            << "vector 元素总数        : " << items.size() << "\n"
+            << "atomic 累加结果        : " << counter.load() << "\n"
+            << "C++ 语言标准           : " << __cplusplus << "\n";
+  return 0;
 }

@@ -1,0 +1,136 @@
+---
+BasedOnStyle: Google
+
+# 开括号(开圆括号、开尖括号、开方括号)后的对齐: Align, DontAlign, AlwaysBreak(总是在开括号后换行)
+AlignAfterOpenBracket: Align
+
+# 对齐转义换行符，Right 会将换行符对其到最大字符处
+AlignEscapedNewlines: Left
+
+# 允许短的函数放在同一行: None, InlineOnly(定义在类中), Empty(空函数), Inline(定义在类中，空函数), All
+AllowShortFunctionsOnASingleLine: InlineOnly
+
+# 总是在 template 声明后换行
+AlwaysBreakTemplateDeclarations: true
+
+# false 表示函数实参要么都在同一行，要么都各自一行 false
+BinPackArguments: true
+
+# false 表示所有形参要么都在同一行，要么都各自一行
+BinPackParameters: false
+
+# 对其尾部注释 v16 修改了该语法
+AlignTrailingComments: true
+
+# 允许短匿 Lambda 函数在单行上
+# None   不允许
+# Empty  只有空的允许
+# Inline 当 lambda 在作为函数变量时，允许
+# All 所有
+AllowShortLambdasOnASingleLine: Inline
+
+# 在大括号前换行:
+#   Attach      始终将大括号附加到周围的上下文
+#   Linux       除函数、命名空间和类定义，与Attach类似
+#   Mozilla     除枚举、函数、记录定义，与Attach类似
+#   Stroustrup  除函数定义、catch、else，与Attach类似
+#   Allman      总是在大括号前换行
+#   GNU         总是在大括号前换行，并对于控制语句的大括号增加额外的缩进
+#   WebKit      在函数前换行
+#   Custom      在 BraceWrapping 中自定义
+BreakBeforeBraces: Custom
+
+# 如果 BreakBeforeBraces 设置为 Custom，则使用它来指定应该如何处理每个独立的大括号情况。
+# 否则，它将被忽略。
+BraceWrapping:
+  # 对case后面的大括号换行
+  AfterCaseLabel: false
+
+  # 类定义换行
+  AfterClass: true
+
+  # 对语句 if/for/while/switch/... 的换行风格控制
+  # Never 在控制条件语句之后从不换行
+  # MultiLine 只在一个多行控制语句之后换行
+  # Always 在控制语句之后总是换行
+  AfterControlStatement: Always
+
+  # 枚举定义后大括号换行
+  AfterEnum: true
+
+  # 在函数定义之后大括号换行
+  AfterFunction: true
+
+  # 命名空间后换行
+  AfterNamespace: true
+
+  # 结构体定义之后换行
+  AfterStruct: true
+
+  # 联合定义之后换行
+  AfterUnion: true
+
+  # extern 声明之后换行
+  AfterExternBlock: true
+
+  # 在 catch 之前换行
+  BeforeCatch: true
+
+  # 在else之前换行
+  BeforeElse: true
+
+  # 在Lambda表达式块之前换行
+  BeforeLambdaBody: false
+
+  # 在while之前换行
+  BeforeWhile: false
+
+  # 对换行的大括号缩进
+  IndentBraces: false
+
+
+# 根据该值，多个 #include 块可以被排序为一个，并根据类别进行划分
+# Preserve 每个 #include 块单独排序
+# Merge 合并多个 #include 块，并且整体排序
+# Regroup 合并多个 #include 块，并且整体排序，然后根据类别优先级分组，可查询 IncludeCategories
+IncludeBlocks: Regroup
+
+# 排序规则
+IncludeCategories:
+  - Regex: '^<ext/.*\.h'
+    Priority: 2
+    SortPriority: 0
+    CaseSensitive: false
+  - Regex: '^<.*\.h'
+    Priority: 1
+    SortPriority: 0
+    CaseSensitive: false
+  - Regex: '^<.*'
+    Priority: 0
+    SortPriority: 0
+    CaseSensitive: false
+  - Regex: '.*'
+    Priority: 3
+    SortPriority: 0
+    CaseSensitive: false
+
+# case 是否需要缩进
+IndentCaseLabels: true
+
+# namespace 缩进
+# None, 不缩进
+# Inner, 只缩进嵌套的 namespace
+# All, 缩进所有
+NamespaceIndentation: All
+
+# 指针对齐风格
+# Left 向左对齐指针     int*  a;
+# Right 向右对齐指针    int  *a;
+# Middle 中间对齐指针   int * a;
+PointerAlignment: Left
+
+# include 排序
+SortIncludes: true
+
+# tab 的宽度
+TabWidth: 2
