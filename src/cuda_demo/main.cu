@@ -47,7 +47,8 @@ constexpr int N = 1 << 24;
 //
 // ★ 线程编号怎么算（一维版）：
 //      blockIdx.x  = 我这个线程属于第几个"线程块"
-//      blockDim.x  = 一个块里装了多少线程
+//      blockDim.x  = 一个块里装了多少线程 （256, 来源于 134~135 行），
+//                    对于同一份启动配置，blockDim 对所有块、所有线程是同一个值。
 //      threadIdx.x = 我在块内的第几个
 //   全局编号 i = blockIdx.x * blockDim.x + threadIdx.x
 //
@@ -75,7 +76,7 @@ double time_ms(Fn&& f)
 
 int main()
 {
-  std::printf("===== CUDA Demo : 向量相加 (N=%d) =====\n", N);
+  std::printf("===== CUDA Demo : 浮点数相加 (N=%d) =====\n", N);
 
   // ── 第一幕：GPU 在不在？ ──────────────────────────────────
   int devCount = 0;
@@ -106,8 +107,8 @@ int main()
     a[i] = (i % 1000) * 0.7f;
     b[i] = (i % 1000) * 0.3f;
   }
-  std::vector<float> ref(N), gpu(N);  // ref=CPU 结果, gpu=GPU 结果
 
+  std::vector<float> ref(N), gpu(N);  // ref=CPU 结果, gpu=GPU 结果
   double cpu_ms = time_ms([&] {
     for (int i = 0; i < N; ++i)  // 老办法：CPU 单核，一遍一遍串行加
       ref[i] = a[i] + b[i];
@@ -142,7 +143,7 @@ int main()
     CUDA_CHECK(cudaEventCreate(&t1));
     CUDA_CHECK(cudaEventRecord(t0));
 
-    vecAdd<<<blocks, threads>>>(d_a, d_b, d_c, N);
+    vecAdd<<<blocks, threads>>>(d_a, d_b, d_c, N); // GPU 计算
     CUDA_CHECK(cudaGetLastError());  // <<<>>> 启动是异步的，错误在这才现形
     CUDA_CHECK(cudaEventRecord(t1));
     CUDA_CHECK(cudaEventSynchronize(t1));  // 等 GPU 干完再继续
@@ -166,17 +167,20 @@ int main()
       if (std::fabs(gpu[i] - ref[i]) > 1e-3f)
       {
         if (bad < 5)
+        {
           std::printf("不一致 @%d: GPU=%g CPU=%g\n", i, gpu[i], ref[i]);
+        }
+      
         ++bad;
       }
     }
-    
+
     std::printf("\n[GPU] kernel 耗时: %.3f ms (纯计算，不含搬运)\n", gpu_ms);
     std::printf("结果校验: %s\n",
                 bad == 0 ? "✓ GPU 和 CPU 完全对得上" : "✗ 有差异，回去查算法");
     std::printf("加速比: CPU/GPU = %.1f 倍\n", cpu_ms / gpu_ms);
     std::printf(
-        "（注意：这里只比了计算本身；真实工程还要把两次搬运的钱算进去）\n");
+        "（注意：这里只比了计算本身；真实工程还要把两次搬运(RAM -> VRAM, VRAM -> RAM)的时间消耗算进去）\n");
   }
   else
   {
