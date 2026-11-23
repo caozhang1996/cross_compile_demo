@@ -30,11 +30,11 @@
 //   一旦错位（stride 3、跳行…），每个 sector 里只有少数字节被用上，
 //   其余全浪费——内存流量瞬间翻几倍。
 //
-// 我们准备了 4 个核，输出都是灰度图，但是非写法的访问模式天差地别：
-//   kernel 1 · 只取 R 通道当灰度：stride 3 访问 → 每个 sector 只用 1/3
-//   kernel 2 · 三个通道一起读：按像素整体读 → sector 全部吃满（正解）
-//   kernel 3 · 列主序访问：连续的线程在跳行 → 灾难级不合并（反例）
-//   kernel 4 · 深度图 uint16 → uint8 灰度：2 字节像素天然合并
+// 我们准备了 4 个核函数，输出都是灰度图，但它们的访问模式天差地别：
+//   kernel func 1 · 只取 R 通道当灰度：stride 3 访问 → 每个 sector 只用 1/3
+//   kernel func 2 · 三个通道一起读：按像素整体读 → sector 全部吃满（正解）
+//   kernel func 3 · 列主序访问：连续的线程在跳行 → 灾难级不合并（反例）
+//   kernel func 4 · 深度图 uint16 → uint8 灰度：2 字节像素天然合并
 // 四个核结果都能和 CPU 参考版对得上——同一个结果，不同的命。
 // ==============================================================
 
@@ -72,7 +72,7 @@ __host__ __device__ inline uint8_t rgb888_gray(const uint8_t* p)
 }
 
 // ==============================================================
-// kernel 1 —— 「懒写法」：只取 R 通道当灰度
+// kernel func 1 —— 「懒写法」：只取 R 通道当灰度
 // 数据访问：src[i*3]，步长 3 地读字节。
 // 为什么慢（本节重点，结合上面的 sector 讲）：
 //   warp 32 线程要读的地址是 0,3,6,...93，落在字节 0~95 这 96 字节里
@@ -89,7 +89,7 @@ __global__ void gray_extractR(const uint8_t* src, uint8_t* dst, int n)
 }
 
 // ==============================================================
-// kernel 2 —— 正解：把 3 个字节当作"一个整体"从相邻地址读
+// kernel func 2 —— 正解：把 3 个字节当作"一个整体"从相邻地址读
 // 数据访问：线程 i 读 src[i*3]、src[i*3+1]、src[i*3+2]。
 // 为什么快：
 //   3 条 load 请求的地址分别是 {0,3,...,93}、{1,4,...,94}、{2,5,...,95}，
@@ -107,7 +107,7 @@ __global__ void gray_rgb888(const uint8_t* src, uint8_t* dst, int n)
 }
 
 // ==============================================================
-// kernel 3 —— 反例：列主序访问同一张行主序图（历史教学名场面）
+// kernel func 3 —— 反例：列主序访问同一张行主序图（历史教学名场面）
 // 正确性不变，但访问模式故意写坏：
 //   线程 i 负责的像素是 列 x = i/H、行 y = i%H。
 //   连续线程 i、i+1 → 行 y 加 1 → 像素地址跳了一个整行 W*3 字节！
@@ -128,7 +128,7 @@ __global__ void gray_rgb888_columnmajor(const uint8_t* src, uint8_t* dst, int w,
 }
 
 // ==============================================================
-// kernel 4 —— 深度图：uint16 转 8bit 灰度（顺便归一化）
+// kernel func 4 —— 深度图：uint16 转 8bit 灰度（顺便归一化）
 // 数据访问：线程 i 读 1 个 uint16。连续的线程 → 连续 2 字节。
 //   warp 32 线程覆盖 64 字节 = 恰好 2 个 sector，整段吃满 → 天然合并。
 // 归一化：把毫米距离压到 0~255，maxDepth 以内线性映射、超出截断。
@@ -245,12 +245,14 @@ int main()
   }
 
   uint8_t* d_rgb;   uint16_t* d_depth;
-  uint8_t *d_grayR, *d_grayY, *d_grayY_cm, *d_grayDepth;
+  // 四份显存输出。命名说明：Luma = 亮度(即灰度 Y)
+  // 概念；_cm = column-major(列主序反例)的亮度版
+  uint8_t *d_grayR, *d_grayLuma, *d_grayLuma_cm, *d_grayDepth;
   CUDA_CHECK(cudaMalloc(&d_rgb, (size_t)N * 3 * sizeof(uint8_t)));
   CUDA_CHECK(cudaMalloc(&d_depth, (size_t)N * sizeof(uint16_t)));
   CUDA_CHECK(cudaMalloc(&d_grayR, (size_t)N));
-  CUDA_CHECK(cudaMalloc(&d_grayY, (size_t)N));
-  CUDA_CHECK(cudaMalloc(&d_grayY_cm, (size_t)N));
+  CUDA_CHECK(cudaMalloc(&d_grayLuma, (size_t)N));
+  CUDA_CHECK(cudaMalloc(&d_grayLuma_cm, (size_t)N));
   CUDA_CHECK(cudaMalloc(&d_grayDepth, (size_t)N));
   CUDA_CHECK(cudaMemcpy(d_rgb, rgb.data(), (size_t)N * 3, cudaMemcpyHostToDevice));
   CUDA_CHECK(cudaMemcpy(d_depth, depth.data(), (size_t)N * sizeof(uint16_t), cudaMemcpyHostToDevice));
@@ -265,7 +267,7 @@ int main()
   CUDA_CHECK(cudaEventCreate(&e_[0]));
   CUDA_CHECK(cudaEventCreate(&e_[1]));
 
-  // ---- kernel 1：只取 R ----
+  // ---- kernel func 1：只取 R ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   gray_extractR<<<blocks, threads>>>(d_rgb, d_grayR, N);
   CUDA_CHECK(cudaGetLastError());
@@ -275,27 +277,27 @@ int main()
   float ms_R; 
   CUDA_CHECK(cudaEventElapsedTime(&ms_R, e_[0], e_[1]));
 
-  // ---- kernel 2：整像素三通道 ----
+  // ---- kernel func 2：整像素三通道 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
-  gray_rgb888<<<blocks, threads>>>(d_rgb, d_grayY, N);
+  gray_rgb888<<<blocks, threads>>>(d_rgb, d_grayLuma, N);
   CUDA_CHECK(cudaGetLastError());
   CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
   
-  float ms_Y;
-  CUDA_CHECK(cudaEventElapsedTime(&ms_Y, e_[0], e_[1]));
+  float ms_Luma;
+  CUDA_CHECK(cudaEventElapsedTime(&ms_Luma, e_[0], e_[1]));
 
-  // ---- kernel 3：列主序反例 ----
+  // ---- kernel func 3：列主序反例 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
-  gray_rgb888_columnmajor<<<blocks, threads>>>(d_rgb, d_grayY_cm, W, H);
+  gray_rgb888_columnmajor<<<blocks, threads>>>(d_rgb, d_grayLuma_cm, W, H);
   CUDA_CHECK(cudaGetLastError()); 
   CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
   
-  float ms_CM; 
-  CUDA_CHECK(cudaEventElapsedTime(&ms_CM, e_[0], e_[1]));
+  float ms_LumaCM; 
+  CUDA_CHECK(cudaEventElapsedTime(&ms_LumaCM, e_[0], e_[1]));
 
-  // ---- kernel 4：深度转灰度 ----
+  // ---- kernel func 4：深度转灰度 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   depth_to_gray8<<<blocks, threads>>>(d_depth, d_grayDepth, N, kMaxDepth);
   CUDA_CHECK(cudaGetLastError());
@@ -306,10 +308,10 @@ int main()
   CUDA_CHECK(cudaEventElapsedTime(&ms_D, e_[0], e_[1]));
 
   // ── 第四幕：校验（GPU 结果 vs CPU 参考，必须逐字节一致）─────
-  std::vector<uint8_t> gR(N), gY(N), gCM(N), gD(N);
+  std::vector<uint8_t> gR(N), gLuma(N), gLumaCM(N), gD(N);
   CUDA_CHECK(cudaMemcpy(gR.data(), d_grayR, N, cudaMemcpyDeviceToHost));
-  CUDA_CHECK(cudaMemcpy(gY.data(), d_grayY, N, cudaMemcpyDeviceToHost));
-  CUDA_CHECK(cudaMemcpy(gCM.data(), d_grayY_cm, N, cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaMemcpy(gLuma.data(), d_grayLuma, N, cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaMemcpy(gLumaCM.data(), d_grayLuma_cm, N, cudaMemcpyDeviceToHost));
   CUDA_CHECK(cudaMemcpy(gD.data(), d_grayDepth, N, cudaMemcpyDeviceToHost));
 
   auto diff = [](const auto& a, const auto& b) {
@@ -331,41 +333,41 @@ int main()
   };
 
   auto diff_R = diff(gR, refGrayR);
-  auto diff_Y = diff(gY, refGray);
-  auto diff_CM = diff(gCM, refGray);
+  auto diff_Luma = diff(gLuma, refGray);
+  auto diff_LumaCM = diff(gLumaCM, refGray);
   auto diff_D = diff(gD, refGrayDepth);
 
   // ── 第五幕：报告 ───────────────────────────────────────────
-  std::printf("\n%-28s %9s  校验\n", "kernel", "耗时(ms)");
+  std::printf("\n%-28s %9s  校验\n", "kernel func", "耗时(ms)");
   std::printf("%-28s %9.3f  %s\n", "1·只取R通道(stride3)", ms_R,
               diff_R.first == 0 ? "✓" : "✗");
-  std::printf("%-28s %9.3f  %s\n", "2·三通道整读(正解)", ms_Y,
-              diff_Y.first == 0 ? "✓" : "✗");
-  std::printf("%-28s %9.3f  %s\n", "3·列主序(反例)", ms_CM,
-              diff_CM.first == 0 ? "✓" : "✗");
+  std::printf("%-28s %9.3f  %s\n", "2·三通道整读(正解)", ms_Luma,
+              diff_Luma.first == 0 ? "✓" : "✗");
+  std::printf("%-28s %9.3f  %s\n", "3·列主序(反例)", ms_LumaCM,
+              diff_LumaCM.first == 0 ? "✓" : "✗");
   std::printf("%-28s %9.3f  %s\n", "4·深度16bit→灰度", ms_D,
               diff_D.first == 0 ? "✓" : "✗");
   std::printf("\n== 关注点 ==");
-  std::printf("\n· kernel1 vs kernel2：同样输出尺寸，1 是 3× 内存流量（越显存越明显）");
-  std::printf("\n· kernel2 vs kernel3：结果一模一样（都对了），访问模式毁性能");
-  std::printf("\n· kernel1、2、3 校验均通过 = 三种写法结果都对，速度差就是内存效率差\n");
+  std::printf("\n· kernel func 1 vs kernel func 2：同样输出尺寸，1 是 3× 内存流量（越显存越明显）");
+  std::printf("\n· kernel func 2 vs kernel func 3：结果一模一样（都对了），访问模式毁性能");
+  std::printf("\n· kernel func 1、2、3 校验均通过 = 三种写法结果都对，速度差就是内存效率差\n");
 
-  if (diff_Y.second >= 0)
-    std::printf("首个不一致索引: %d (GPU=%d CPU=%d)\n", diff_Y.second, gY[diff_Y.second],
-                refGray[diff_Y.second]);
+  if (diff_Luma.second >= 0)
+    std::printf("首个不一致索引: %d (GPU=%d CPU=%d)\n", diff_Luma.second, gLuma[diff_Luma.second],
+                refGray[diff_Luma.second]);
 
   // 上板跑时，用 Nsight Compute 看"到底差在哪"：
   //   ncu --set MemoryWorkloadAnalysis ./rgb2gray_demo
   //   重点看每个核的 Global Memory Load / Store 效率与实际 DRAM 读字节数：
-  //   kernel1 的 Global Load Throughput 约只有 kernel2 的 1/3,
-  //   kernel3 会灾难性地拉高 Local / Global 事务数。
+  //   kernel func 1 的 Global Load Throughput 约只有 kernel func 2 的 1/3,
+  //   kernel func 3 会灾难性地拉高 Local / Global 事务数。
   std::printf("\n（Orin 上建议 ncu --section MemoryWorkloadAnalysis 对比这 4 个核）\n");
 
   CUDA_CHECK(cudaFree(d_rgb));
   CUDA_CHECK(cudaFree(d_depth));
   CUDA_CHECK(cudaFree(d_grayR));
-  CUDA_CHECK(cudaFree(d_grayY));
-  CUDA_CHECK(cudaFree(d_grayY_cm));
+  CUDA_CHECK(cudaFree(d_grayLuma));
+  CUDA_CHECK(cudaFree(d_grayLuma_cm));
   CUDA_CHECK(cudaFree(d_grayDepth));
   CUDA_CHECK(cudaEventDestroy(e_[0]));
   CUDA_CHECK(cudaEventDestroy(e_[1]));
