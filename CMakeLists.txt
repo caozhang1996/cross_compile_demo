@@ -25,14 +25,22 @@ add_test(NAME machine_check COMMAND ${PROJECT_NAME})
 if(CMAKE_CROSSCOMPILING)
   enable_language(CUDA)   # toolchain 已指定编译器；这里真正注册这门语言
 
-  add_executable(cuda_demo src/cuda_demo/main.cu)
+  add_executable(vec_add_demo src/cuda_demo/vec_add.cu)
 
   # CUDA_ARCHITECTURES 决定 nvcc 的 -gencode = 编出哪种 GPU 能跑的机器码：
   #   "87" = sm_87 = Jetson Orin 的 GPU（Ampere GA10B，计算能力 8.7）。
   # 换板子/显卡时改成对应算力，如 "75"(Xavier) / "86"(RTX 30) / "90"(RTX 50)。
-  set_target_properties(cuda_demo PROPERTIES CUDA_ARCHITECTURES 87)
+  set_target_properties(vec_add_demo PROPERTIES CUDA_ARCHITECTURES 87)
 
-  install(TARGETS cuda_demo
+  install(TARGETS vec_add_demo
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
+
+  # 灰度转换演示（步骤②：内存布局 + 合并访问）
+  add_executable(rgb2gray_demo src/cuda_demo/rgb2gray.cu)
+  set_target_properties(rgb2gray_demo PROPERTIES CUDA_ARCHITECTURES 87)
+  install(TARGETS rgb2gray_demo
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+
 endif()
