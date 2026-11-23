@@ -3,7 +3,7 @@
 // CUDA 进阶 Demo ② —— 图像灰度转换（RGBD 数据入手）
 // 主线：内存布局 + 合并访问（coalesced access）
 //
-// 前置知识（要用到步骤①向量加法的底子）：
+// 前置知识（要用到 Demo ① 向量加法的底子）：
 //   · 线程编号：i = blockIdx.x*blockDim.x + threadIdx.x
 //   · 显存搬运：cudaMalloc / cudaMemcpy / cudaFree
 //
