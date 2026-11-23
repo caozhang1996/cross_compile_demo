@@ -63,12 +63,12 @@ constexpr int N = W * H;  // 像素总数
     }                                                                      \
   } while (0)
 
-// ── 亮度公式：同一份代码 CPU / GPU 共用（__host__ __device__）──
+// ── 计算灰度公式：同一份代码 CPU / GPU 共用（__host__ __device__）──
 // 这样 CPU 参考版和 GPU 核用的是同一个函数，结果必然逐字节一致。
 __host__ __device__ inline uint8_t rgb888_gray(const uint8_t* p)
 {
-  uint32_t y = 77u * p[0] + 150u * p[1] + 29u * p[2];  // 先放大 256 倍
-  return (uint8_t)(y >> 8);                            // 再缩小回去
+  uint32_t y = 77u * p[0] + 150u * p[1] + 29u * p[2];  
+  return (uint8_t)(y >> 8);                            
 }
 
 // ==============================================================
@@ -138,13 +138,22 @@ __global__ void depth_to_gray8(const uint16_t* depth, uint8_t* dst, int n, int m
   if (i < n)
   {
     uint32_t d = depth[i];
-    if (d == 0) dst[i] = 0;  // 0 = 无效深度（相机没测到），涂黑
-    else if (d >= (uint32_t)maxDepth) dst[i] = 255;  // 太远/爆掉，涂白
-    else dst[i] = (uint8_t)((d * 255u) / (uint32_t)maxDepth);
+    if (d == 0) 
+    {
+      dst[i] = 0; // 0 = 无效深度（相机没测到），涂黑
+    }
+    else if (d >= (uint32_t)maxDepth)
+    {
+      dst[i] = 255; // 太远或者爆掉，涂白
+    }
+    else
+    {
+      dst[i] = (uint8_t)((d * 255u) / (uint32_t)maxDepth);
+    }
   }
 }
 
-// ── 主机计时小工具（沿用步骤①）──────────────────────────────
+// ──────────────────────── 主机计时小工具 ─────────────────────────
 template <typename Fn>
 double time_ms(Fn&& f)
 {
@@ -161,8 +170,8 @@ int main()
 
   // ── 第一幕：GPU 是否在线（本容器无 GPU，qemu 也仿不了 → 走 CPU）──
   int devCount = 0;
-  cudaError_t e0 = cudaGetDeviceCount(&devCount);
-  bool haveGPU = (e0 == cudaSuccess && devCount > 0);
+  cudaError_t error = cudaGetDeviceCount(&devCount);
+  bool haveGPU = (error == cudaSuccess && devCount > 0);
   if (haveGPU)
   {
     cudaDeviceProp prop;
@@ -186,9 +195,18 @@ int main()
     rgb[i * 3 + 0] = (uint8_t)((i * 5) & 0xFF);
     rgb[i * 3 + 1] = (uint8_t)((i * 29 + 7) & 0xFF);
     rgb[i * 3 + 2] = (uint8_t)((i * 87 + 13) & 0xFF);
+
     uint16_t d = (uint16_t)(300 + (i * 137) % 7300);  // 300 ~ 7600 mm
-    if (i % 97 == 0)   d = 0;        // 没测到的坏点
-    if (i % 131 == 0)  d = 65535;    // 爆掉/遮挡
+    if (i % 97 == 0)
+    {
+      d = 0;        // 没测到的坏点
+    }
+
+    if (i % 131 == 0)
+    {
+      d = 65535;    // 爆掉/遮挡
+    }
+    
     depth[i] = d;
   }
 
@@ -199,17 +217,32 @@ int main()
     for (int i = 0; i < N; ++i)
     {
       refGray[i] = rgb888_gray(&rgb[(size_t)i * 3]);
-      refGrayR[i] = rgb[i * 3];  // 懒写法就是把 R 当灰度
+      
+      refGrayR[i] = rgb[i * 3];  // 懒写法: 把 R 通道当灰度
+ 
       uint32_t d = depth[i];
-      if (d == 0) refGrayDepth[i] = 0;
-      else if (d >= kMaxDepth) refGrayDepth[i] = 255;
-      else refGrayDepth[i] = (uint8_t)((d * 255u) / (uint32_t)kMaxDepth);
+      if (d == 0)
+      {
+        refGrayDepth[i] = 0;
+      }
+      else if (d >= kMaxDepth)
+      {
+        refGrayDepth[i] = 255;
+      }
+      else
+      {
+        refGrayDepth[i] = (uint8_t)((d * 255u) / (uint32_t)kMaxDepth);
+      }
     }
   });
-  std::printf("[CPU] 三张灰度图参考版耗时: %.2f ms\n\n", cpu_ms);
+  std::printf("[CPU 参考版] 三张模拟计算灰度图、提取 R 通道、深度图转灰度图耗时: %.2f ms\n\n", cpu_ms);
 
   // ── 第三幕：GPU 正戏（4 个核 + 各自计时 + 校验）────────────
-  if (!haveGPU) { std::printf("跳过 GPU 段。CPU 参考版已验证算法正确性。\n"); return 0; }
+  if (!haveGPU)
+  { 
+    std::printf("跳过 GPU 段。CPU 参考版已验证算法正确性。\n");
+    return 0;
+  }
 
   uint8_t* d_rgb;   uint16_t* d_depth;
   uint8_t *d_grayR, *d_grayY, *d_grayY_cm, *d_grayDepth;
@@ -228,35 +261,49 @@ int main()
 
   // 每个核独立计时：录起点事件 → 派活 → 录终点 → 取耗时。
 
-  // ---- kernel 1：只取 R ----
   cudaEvent_t e_[2];
-  CUDA_CHECK(cudaEventCreate(&e_[0])); CUDA_CHECK(cudaEventCreate(&e_[1]));
+  CUDA_CHECK(cudaEventCreate(&e_[0]));
+  CUDA_CHECK(cudaEventCreate(&e_[1]));
+
+  // ---- kernel 1：只取 R ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   gray_extractR<<<blocks, threads>>>(d_rgb, d_grayR, N);
-  CUDA_CHECK(cudaGetLastError()); CUDA_CHECK(cudaEventRecord(e_[1]));
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
-  float ms_R; CUDA_CHECK(cudaEventElapsedTime(&ms_R, e_[0], e_[1]));
+
+  float ms_R; 
+  CUDA_CHECK(cudaEventElapsedTime(&ms_R, e_[0], e_[1]));
 
   // ---- kernel 2：整像素三通道 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   gray_rgb888<<<blocks, threads>>>(d_rgb, d_grayY, N);
-  CUDA_CHECK(cudaGetLastError()); CUDA_CHECK(cudaEventRecord(e_[1]));
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
-  float ms_Y; CUDA_CHECK(cudaEventElapsedTime(&ms_Y, e_[0], e_[1]));
+  
+  float ms_Y;
+  CUDA_CHECK(cudaEventElapsedTime(&ms_Y, e_[0], e_[1]));
 
   // ---- kernel 3：列主序反例 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   gray_rgb888_columnmajor<<<blocks, threads>>>(d_rgb, d_grayY_cm, W, H);
-  CUDA_CHECK(cudaGetLastError()); CUDA_CHECK(cudaEventRecord(e_[1]));
+  CUDA_CHECK(cudaGetLastError()); 
+  CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
-  float ms_CM; CUDA_CHECK(cudaEventElapsedTime(&ms_CM, e_[0], e_[1]));
+  
+  float ms_CM; 
+  CUDA_CHECK(cudaEventElapsedTime(&ms_CM, e_[0], e_[1]));
 
   // ---- kernel 4：深度转灰度 ----
   CUDA_CHECK(cudaEventRecord(e_[0]));
   depth_to_gray8<<<blocks, threads>>>(d_depth, d_grayDepth, N, kMaxDepth);
-  CUDA_CHECK(cudaGetLastError()); CUDA_CHECK(cudaEventRecord(e_[1]));
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaEventRecord(e_[1]));
   CUDA_CHECK(cudaEventSynchronize(e_[1]));
-  float ms_D; CUDA_CHECK(cudaEventElapsedTime(&ms_D, e_[0], e_[1]));
+  
+  float ms_D;
+  CUDA_CHECK(cudaEventElapsedTime(&ms_D, e_[0], e_[1]));
 
   // ── 第四幕：校验（GPU 结果 vs CPU 参考，必须逐字节一致）─────
   std::vector<uint8_t> gR(N), gY(N), gCM(N), gD(N);
@@ -266,35 +313,46 @@ int main()
   CUDA_CHECK(cudaMemcpy(gD.data(), d_grayDepth, N, cudaMemcpyDeviceToHost));
 
   auto diff = [](const auto& a, const auto& b) {
-    long long bad = 0; int first = -1;
+    long long bad = 0;
+    int first = -1;
     for (size_t i = 0; i < a.size(); ++i)
-      if (a[i] != b[i]) { ++bad; if (first < 0) first = (int)i; }
+    {
+      if (a[i] != b[i])
+      { 
+        ++bad;
+        if (first < 0)
+        {
+          first = (int)i;
+        }
+      }
+    }
+
     return std::make_pair(bad, first);
   };
 
-  auto d_R = diff(gR, refGrayR);
-  auto d_Y = diff(gY, refGray);
-  auto d_CM = diff(gCM, refGray);
-  auto d_D = diff(gD, refGrayDepth);
+  auto diff_R = diff(gR, refGrayR);
+  auto diff_Y = diff(gY, refGray);
+  auto diff_CM = diff(gCM, refGray);
+  auto diff_D = diff(gD, refGrayDepth);
 
   // ── 第五幕：报告 ───────────────────────────────────────────
   std::printf("\n%-28s %9s  校验\n", "kernel", "耗时(ms)");
   std::printf("%-28s %9.3f  %s\n", "1·只取R通道(stride3)", ms_R,
-              d_R.first == 0 ? "✓" : "✗");
+              diff_R.first == 0 ? "✓" : "✗");
   std::printf("%-28s %9.3f  %s\n", "2·三通道整读(正解)", ms_Y,
-              d_Y.first == 0 ? "✓" : "✗");
+              diff_Y.first == 0 ? "✓" : "✗");
   std::printf("%-28s %9.3f  %s\n", "3·列主序(反例)", ms_CM,
-              d_CM.first == 0 ? "✓" : "✗");
+              diff_CM.first == 0 ? "✓" : "✗");
   std::printf("%-28s %9.3f  %s\n", "4·深度16bit→灰度", ms_D,
-              d_D.first == 0 ? "✓" : "✗");
+              diff_D.first == 0 ? "✓" : "✗");
   std::printf("\n== 关注点 ==");
   std::printf("\n· kernel1 vs kernel2：同样输出尺寸，1 是 3× 内存流量（越显存越明显）");
   std::printf("\n· kernel2 vs kernel3：结果一模一样（都对了），访问模式毁性能");
   std::printf("\n· kernel1、2、3 校验均通过 = 三种写法结果都对，速度差就是内存效率差\n");
 
-  if (d_Y.second >= 0)
-    std::printf("首个不一致索引: %d (GPU=%d CPU=%d)\n", d_Y.second, gY[d_Y.second],
-                refGray[d_Y.second]);
+  if (diff_Y.second >= 0)
+    std::printf("首个不一致索引: %d (GPU=%d CPU=%d)\n", diff_Y.second, gY[diff_Y.second],
+                refGray[diff_Y.second]);
 
   // 上板跑时，用 Nsight Compute 看"到底差在哪"：
   //   ncu --set MemoryWorkloadAnalysis ./rgb2gray_demo
@@ -303,10 +361,15 @@ int main()
   //   kernel3 会灾难性地拉高 Local / Global 事务数。
   std::printf("\n（Orin 上建议 ncu --section MemoryWorkloadAnalysis 对比这 4 个核）\n");
 
-  CUDA_CHECK(cudaFree(d_rgb)); CUDA_CHECK(cudaFree(d_depth));
-  CUDA_CHECK(cudaFree(d_grayR)); CUDA_CHECK(cudaFree(d_grayY));
-  CUDA_CHECK(cudaFree(d_grayY_cm)); CUDA_CHECK(cudaFree(d_grayDepth));
-  CUDA_CHECK(cudaEventDestroy(e_[0])); CUDA_CHECK(cudaEventDestroy(e_[1]));
+  CUDA_CHECK(cudaFree(d_rgb));
+  CUDA_CHECK(cudaFree(d_depth));
+  CUDA_CHECK(cudaFree(d_grayR));
+  CUDA_CHECK(cudaFree(d_grayY));
+  CUDA_CHECK(cudaFree(d_grayY_cm));
+  CUDA_CHECK(cudaFree(d_grayDepth));
+  CUDA_CHECK(cudaEventDestroy(e_[0]));
+  CUDA_CHECK(cudaEventDestroy(e_[1]));
+  
   std::printf("\n===== Demo ② 结束 =====\n");
   return 0;
 }
