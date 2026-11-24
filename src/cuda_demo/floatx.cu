@@ -54,7 +54,7 @@ int main(int argc, char**argv)
     int threads = 256;
     int blocks = (n + threads - 1) / threads;
 
-    // 准备数据
+    // 准备数据s
     std::vector<float3> points(n, make_float3(1.0f, 2.0f, 3.0f));
     float3*  d_float3;
     cudaMalloc(&d_float3, sizeof(float3) * n);
