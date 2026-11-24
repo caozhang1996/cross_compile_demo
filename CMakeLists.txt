@@ -25,6 +25,13 @@ add_test(NAME machine_check COMMAND ${PROJECT_NAME})
 if(CMAKE_CROSSCOMPILING)
   enable_language(CUDA)   # toolchain 已指定编译器；这里真正注册这门语言
 
+  # floatx CUDA 内置变量使用
+  add_executable(floatx_demo src/cuda_demo/floatx.cu)
+  set_target_properties(floatx_demo PROPERTIES CUDA_ARCHITECTURES 87)
+  install(TARGETS floatx_demo
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+
   add_executable(vec_add_demo src/cuda_demo/vec_add.cu)
 
   # CUDA_ARCHITECTURES 决定 nvcc 的 -gencode = 编出哪种 GPU 能跑的机器码：
