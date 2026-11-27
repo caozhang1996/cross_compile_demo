@@ -50,4 +50,20 @@ if(CMAKE_CROSSCOMPILING)
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
 
+  # ── OpenCV 实验目标：棋盘格快速检测（非 GPU，纯 CPU 预处理用）─────
+  # OpenCV 只装了 aarch64 交叉版（/opt/3rdparty/OpenCV），native(x86)
+  # 没这库，所以跟 CUDA 一样只在交叉构建里启用。
+  find_package(OpenCV REQUIRED)
+
+  add_executable(fast_check_chessboard
+    "src/opencv_demo/fast_check_chessboard/main.cpp"  # 目录名带空格，必须引号包住
+  )
+  target_compile_features(fast_check_chessboard PRIVATE cxx_std_17)  # main.cpp 用了 std::filesystem
+  target_include_directories(fast_check_chessboard PRIVATE ${OpenCV_INCLUDE_DIRS})
+  target_link_libraries(fast_check_chessboard PRIVATE ${OpenCV_LIBS})
+
+  install(TARGETS fast_check_chessboard
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+
 endif()

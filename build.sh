@@ -6,6 +6,7 @@
 #   ./build.sh cross    # 交叉编译（aarch64），产物安装到 install-cross/
 #   ./build.sh run                # 伪板运行 cross 产物（qemu-aarch64），默认 cross_compile_demo
 #   ./build.sh run cuda_demo      # 伪板运行 GPU demo（cuda_demo，CPU 降级分支）
+#   ./build.sh run fast_check_chessboard [图像目录]  # 伪板运行 OpenCV 棋盘格检测
 #   ./build.sh test     # CTest：原生 + cross 各跑一遍
 #   ./build.sh clean    # 删除 build-*/ 和 install-*/
 #
@@ -37,6 +38,10 @@ NATIVE_BIN="$NATIVE_INSTALL/lib/cross_compile_demo/cross_compile_demo"
 CROSS_BIN="$CROSS_INSTALL/lib/cross_compile_demo/cross_compile_demo"
 CUDA_BIN="$CROSS_INSTALL/lib/cross_compile_demo/cuda_demo"
 
+FAST_CHECK_BIN="$CROSS_INSTALL/lib/cross_compile_demo/fast_check_chessboard"
+# OpenCV 棋盘格检测的测试图目录（demo 相对路径基于它，见 main.cpp 默认值）
+FAST_CHECK_IMAGES="$SRC_DIR/src/opencv_demo/fast_check_chessboard/test_images"
+
 configure_native() {
     cmake -S "$SRC_DIR" -B "$NATIVE_DIR" \
           -DCMAKE_BUILD_TYPE=Release \
@@ -67,11 +72,29 @@ case "${1:-all}" in
     file "$CROSS_BIN"                        # 用 file 确认 ELF 架构
     ;;
   run)
-    # ./build.sh run [cross_compile_demo|cuda_demo]，按 $2 选跑哪个交叉产物
-    # 不传 $2 时默认 cross_compile_demo
-    RUN_BIN="$CROSS_BIN"
-    [ "${2:-}" = "cuda_demo" ] && RUN_BIN="$CUDA_BIN"
-    "$SRC_DIR/run-on-qemu.sh" "$RUN_BIN"
+    # ./build.sh run [cross_compile_demo|cuda_demo|fast_check_chessboard] [额外参数…]
+    # 按 $2 选跑哪个交叉产物；不传默认 cross_compile_demo
+    case "${2:-}" in
+      cuda_demo)
+        RUN_BIN="$CUDA_BIN"
+        RUN_ARGS=()                        # cuda_demo 无额外参数
+        ;;
+      fast_check_chessboard)
+        RUN_BIN="$FAST_CHECK_BIN"
+        # OpenCV 库在 /opt/3rdparty 下，超出 -L 覆盖范围，需 LD_LIBRARY_PATH 补
+        export LD_LIBRARY_PATH="$THIRD_PARTY_LIBRARIES_PATH/OpenCV/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        # OpenCV 依赖的系统库（libjpeg/libpng/libwebp/zlib 等）只在完整 rootfs 里，
+        # run-on-qemu.sh 默认的 /usr/aarch64-linux-gnu 缺它们 → 用 QEMU_LD_PREFIX 指到 /sysroot
+        export QEMU_LD_PREFIX=/sysroot
+        # 可传自定义图像目录，默认 test_images
+        RUN_ARGS=("${3:-$FAST_CHECK_IMAGES}")
+        ;;
+      *)                                 # 默认 cross_compile_demo；$2 非目标名时整体当参数传下去
+        RUN_BIN="$CROSS_BIN"
+        RUN_ARGS=("${@:2}")
+        ;;
+    esac
+    "$SRC_DIR/run-on-qemu.sh" "$RUN_BIN" "${RUN_ARGS[@]}"
     ;;
   test)
     configure_native && cmake --build "$NATIVE_DIR"
@@ -88,7 +111,7 @@ case "${1:-all}" in
     ;;
   *)
     echo "用法: $0 [native|cross|run|test|clean]"
-    echo "      $0 run [cross_compile_demo|cuda_demo]   # 伪板运行，默认 cross_compile_demo"
+    echo "      $0 run [cross_compile_demo|cuda_demo|fast_check_chessboard] [参数…]"
     exit 1
     ;;
 esac
