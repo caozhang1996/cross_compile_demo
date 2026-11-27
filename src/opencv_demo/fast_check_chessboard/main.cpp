@@ -1,13 +1,12 @@
 // fast_check_chessboard/main.cpp
 // 目标：对 test_images 目录下的图像做棋盘格检测（快速预检）。
-// 实现：复制 ustereo_calibrate/cpp/cv_utils.cpp 的 FastCheckChessboardCorners，
-//       遍历目录里所有图片，逐张调用，打印"有/无棋盘格"。
+// 实现：逐张遍历目录图片，用 OpenCV 的 findChessboardCorners + FAST_CHECK
+//       问"图上有没有棋盘格"，只回有/没有，不做角点精定位。
 //
 // 用法：
 //   main <image_dir> [board_width] [board_height]
 //   例：main test_images 11 8
-//   默认 image_dir=test_images，board_size=(11,8)（与熟练工程 ustereo_calibrate
-//   一致）。
+//   默认 image_dir=test_images，board_size=(11,8)。
 
 #include <filesystem>
 #include <iostream>
@@ -19,7 +18,6 @@
 namespace fs = std::filesystem;
 
 // ── 快速棋盘格检测：只回答"图上有没有棋盘"，不做角点精定位 ──────────
-// 来源：ustereo_calibrate/cpp/cv_utils.cpp
 // board_size = (width, height) = 棋盘格内角点数（不是方格数！）
 bool FastCheckChessboardCorners(const cv::Mat &image,
                                 const cv::Size &board_size)

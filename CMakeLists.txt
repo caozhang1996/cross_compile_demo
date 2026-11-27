@@ -56,7 +56,7 @@ if(CMAKE_CROSSCOMPILING)
   find_package(OpenCV REQUIRED)
 
   add_executable(fast_check_chessboard
-    "src/opencv_demo/fast_check_chessboard/main.cpp"  # 目录名带空格，必须引号包住
+    "src/opencv_demo/fast_check_chessboard/main.cpp"
   )
   target_compile_features(fast_check_chessboard PRIVATE cxx_std_17)  # main.cpp 用了 std::filesystem
   target_include_directories(fast_check_chessboard PRIVATE ${OpenCV_INCLUDE_DIRS})
